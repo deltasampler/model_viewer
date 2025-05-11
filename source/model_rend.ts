@@ -17,6 +17,7 @@ export class model_rdata_t {
     vao: WebGLVertexArrayObject;
     vbo: WebGLBuffer;
     ibo: WebGLBuffer;
+    tbo: WebGLTexture;
 };
 
 export function model_rdata_new(): model_rdata_t {
@@ -27,6 +28,7 @@ export function model_rdata_new(): model_rdata_t {
     rdata.vao = 0;
     rdata.vbo = 0;
     rdata.ibo = 0;
+    rdata.tbo = 0;
 
     return rdata;
 }
@@ -48,6 +50,22 @@ export function model_rdata_build(rdata: model_rdata_t, vertices: number[], indi
     rdata.ibo = gl.createBuffer();
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, rdata.ibo);
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, rdata.indices, gl.STATIC_DRAW);
+}
+
+export function model_rdata_texture(rdata: model_rdata_t, w: number, h: number, data: Uint8ClampedArray, is_flipped: boolean): void {
+    rdata.tbo = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, rdata.tbo);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+
+    if (is_flipped) {
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    }
+
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 }
 
 export class model_rend_t {
@@ -85,6 +103,7 @@ export function model_rend_new(): model_rend_t {
             in vec2 v_tex_coord;
             uniform vec3 u_light_dir;
             uniform vec3 u_light_color;
+            uniform sampler2D u_texture;
 
             void main() {
                 vec3 color;
@@ -96,7 +115,7 @@ export function model_rend_new(): model_rend_t {
 
                 color += diffuse;
 
-                o_frag_color = vec4(color, 1.0);
+                o_frag_color = texture(u_texture, v_tex_coord) * vec4(color, 1.0);
             }
         `
     })!;
@@ -120,6 +139,12 @@ export function model_rend_render(rend: model_rend_t, rdata: model_rdata_t, cam:
     gl.uniformMatrix4fv(rend.prog.u_model, false, model);
     gl.uniform3fv(rend.prog.u_light_dir, rend.ligth_dir);
     gl.uniform3fv(rend.prog.u_light_color, rend.ligth_color);
+
     gl.bindVertexArray(rdata.vao);
+
+    if (rdata.tbo) {
+        gl.bindTexture(gl.TEXTURE_2D, rdata.tbo);
+    }
+
     gl.drawElements(gl.TRIANGLES, rdata.index_count, gl.UNSIGNED_INT, 0);
 }
